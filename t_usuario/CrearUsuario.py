@@ -1,5 +1,7 @@
 import boto3
 import hashlib
+from datetime import datetime
+
 
 # Hashear contraseña
 def hash_password(password):
@@ -20,9 +22,9 @@ def lambda_handler(event, context):
             hashed_password = hash_password(password)
             # Conectar DynamoDB
             dynamodb = boto3.resource('dynamodb')
-            t_usuarios = dynamodb.Table('t_usuarios')
+            t_usuario = dynamodb.Table('t_usuario')
 
-            item = t_usuarios.get_item(
+            item = t_usuario.get_item(
                 Key={
                     'tenant_id': tenant_id,
                     'email': email 
@@ -37,11 +39,15 @@ def lambda_handler(event, context):
                     'statusCode': 400,
                     'body': json.dumps(mensaje)
                 }
-            # Almacena los datos del user en la tabla de usuarios en DynamoDB
-            t_usuarios.put_item(
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # Almacena los datos del user en la tabla de usuario en DynamoDB
+            t_usuario.put_item(
                 Item={
+                    'tenant_id' : tenant_id,
                     'email': email,
                     'password': hashed_password,
+                    'name' : name,
+                    'fecha_creacion' : now
                 }
             )
             # Retornar un código de estado HTTP 200 (OK) y un mensaje de éxito
