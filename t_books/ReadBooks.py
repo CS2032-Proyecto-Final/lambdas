@@ -4,25 +4,29 @@ import json
 from boto3.dynamodb.conditions import Key
 
 def lambda_handler(event, context):
-    tenant_id = event['queryStringParameters']['tenant_id']
-    page = int(event['queryStringParameters'].get('page', 1))
-    limit = 10  # Número de resultados por página
+    # Verificar que queryStringParameters exista y contenga los parámetros necesarios
+    tenant_id = event.get('queryStringParameters', {}).get('tenant_id')
+    page = int(event.get('queryStringParameters', {}).get('page', 1))
     
-    # Obtener el nombre de la tabla desde la variable de entorno
+    if not tenant_id:
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'error': 'tenant_id is required'})
+        }
+
+    limit = 10  # Número de resultados por página
     nombre_tabla = os.environ["TABLE_NAME"]
     
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(nombre_tabla)
 
-    # Usar lastEvaluatedKey si se proporciona y no es la primera página
     start_key = None
-    if page > 1 and 'lastEvaluatedKey' in event['queryStringParameters']:
+    if page > 1 and event['queryStringParameters'].get('lastEvaluatedKey'):
         start_key = {
             'tenant_id': tenant_id,
             'isbn': event['queryStringParameters']['lastEvaluatedKey']
         }
     
-    # Consulta con paginación
     response = table.query(
         KeyConditionExpression=Key('tenant_id').eq(tenant_id),
         Limit=limit,
