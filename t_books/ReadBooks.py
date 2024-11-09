@@ -2,41 +2,49 @@ import boto3
 import os
 import json
 from boto3.dynamodb.conditions import Key
+from decimal import Decimal
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table(os.environ["TABLE_NAME"])
 
 def lambda_handler(event, context):
-    # Extraer los parámetros directamente de 'query'
+    # Obtén los parámetros de la solicitud
     tenant_id = event['query']['tenant_id']
-    page = int(event['query']['page'])
+    page = int(event['query'].get('page', 1))
+    limit = 10  # Límite de resultados por página
 
-    limit = 10  # Número de resultados por página
-    nombre_tabla = os.environ["TABLE_NAME"]
-
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(nombre_tabla)
-
-    # Configurar la clave de inicio para paginación, si corresponde
+    # Clave de inicio para paginación, si se proporciona
     start_key = None
-    if page > 1 and 'lastEvaluatedKey' in event['query']:
-        start_key = {
-            'tenant_id': tenant_id,
-            'isbn': event['query']['lastEvaluatedKey']
-        }
-    
-    # Realizar la consulta en DynamoDB
-    response = table.query(
-        KeyConditionExpression=Key('tenant_id').eq(tenant_id),
-        Limit=limit,
-        ExclusiveStartKey=start_key
-    )
+    if 'lastEvaluatedKey' in event['query']:
+        start_key = json.loads(event['query']['lastEvaluatedKey'])
 
-    books = response['Items']
+    # Parámetros de consulta en DynamoDB
+    query_params = {
+        'KeyConditionExpression': Key('tenant_id').eq(tenant_id),
+        'Limit': limit
+    }
+    
+    # Solo añadir 'ExclusiveStartKey' si existe
+    if start_key:
+        query_params['ExclusiveStartKey'] = start_key
+    
+    # Ejecuta la consulta
+    response = table.query(**query_params)
+
+    # Convierte los resultados de Decimal a float o int según corresponda
+    books = json.loads(json.dumps(response.get('Items', []), default=convert_decimal))
     last_evaluated_key = response.get('LastEvaluatedKey', None)
 
-    # Retornar la lista de libros y la clave de paginación
+    # Devuelve los libros y la clave de paginación directamente en el cuerpo de respuesta
     return {
         'statusCode': 200,
-        'body': json.dumps({
+        'body': {
             'books': books,
             'lastEvaluatedKey': last_evaluated_key
-        })
+        }
     }
+
+def convert_decimal(value):
+    if isinstance(value, Decimal):
+        return int(value) if value % 1 == 0 else float(value)
+    raise TypeError
