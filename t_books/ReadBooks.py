@@ -5,8 +5,9 @@ from boto3.dynamodb.conditions import Key
 
 def lambda_handler(event, context):
     # Verificar que queryStringParameters exista y contenga los parámetros necesarios
-    tenant_id = event.get('queryStringParameters', {}).get('tenant_id')
-    page = int(event.get('queryStringParameters', {}).get('page', 1))
+    query_params = event.get('queryStringParameters') or {}
+    tenant_id = query_params.get('tenant_id')
+    page = int(query_params.get('page', 1))
     
     if not tenant_id:
         return {
@@ -20,11 +21,12 @@ def lambda_handler(event, context):
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(nombre_tabla)
 
+    # Preparar la clave de inicio para paginación
     start_key = None
-    if page > 1 and event['queryStringParameters'].get('lastEvaluatedKey'):
+    if page > 1 and query_params.get('lastEvaluatedKey'):
         start_key = {
             'tenant_id': tenant_id,
-            'isbn': event['queryStringParameters']['lastEvaluatedKey']
+            'isbn': query_params['lastEvaluatedKey']
         }
     
     response = table.query(
